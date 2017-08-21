@@ -42,8 +42,10 @@ class XOSClient(object):
         headers['Authorization'] = 'Basic %s' % self.auth
 
         r = requests.request(method,
-                             '%s%s' % (self.base_url, str(url)),
-                             data=data,
-                             headers=headers)
-	return r.json() if r.ok and r.status_code != 204 else {}
+                            '%s%s' % (self.base_url, str(url)),
+                            data=data,
+                            headers=headers)
+        if not r.ok:
+            r.raise_for_status()
+        return r.json() if r.status_code != 204 else {}
 

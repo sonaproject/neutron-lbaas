@@ -4,12 +4,11 @@ import time
 
 from neutron_lbaas.drivers import driver_base
 from neutron_lbaas.drivers.xos import xos_client
+from neutron_lbaas.drivers.xos import xos_network
 
 from oslo_config import cfg
 from oslo_log import log as logging
 
-
-BASE_URL = "/api/tenant"
 
 LOG = logging.getLogger(__name__)
 
@@ -17,11 +16,6 @@ OPTS = [
     cfg.StrOpt(
         'endpoint',
         default='http://127.0.0.1:9000',
-        help=_('XOS service endpoint URL'),
-    ),
-    cfg.StrOpt(
-        'base_url',
-        default='api/tenant/',
         help=_('XOS service endpoint URL'),
     ),
     cfg.StrOpt(
@@ -62,10 +56,11 @@ class XOSDriver(driver_base.LoadBalancerBaseDriver):
         super(XOSDriver, self).__init__(plugin)
 
         self.client = xos_client.XOSClient(cfg.CONF.xos.endpoint,
-                                           cfg.CONF.xos.base_url,
+                                           'api/tenant',
                                            cfg.CONF.xos.user,
                                            cfg.CONF.xos.password)
 
+        self.xos_network = xos_network.XOSNetworkManager()
         self.load_balancer = LoadBalancerManager(self)
         self.listener = ListenerManager(self)
         self.pool = PoolManager(self)
@@ -96,10 +91,11 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         return False
 
     def _construct_args(self, db_lb):
+        # TODO: vip_subnet_id -> vip_network_name, remove vip_address
         args = {
             'name': db_lb.name,
             'vip_subnet_id': 1,
-            'vip_address': '192.168.0.11',
+            'vip_address': '192.168.1.11',
         }
         if db_lb.listeners and db_lb.listeners[0].name:
             try:
@@ -124,6 +120,19 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         vip_ports = self.driver.plugin.db._core_plugin.get_ports(context, filters=filters)
         vip_port = vip_ports[0] if vip_ports and len(vip_ports) == 1 else None
         return vip_port.get('id')
+
+    def _ensure_xos_network(self, context, lb):
+        s = self.driver.plugin.db._core_plugin.get_subnet(context, lb.vip_subnet_id)
+        n = self.driver.plugin.db._core_plugin.get_network(context, s.get('network_id'))
+        vip_network_name = n.get('name')
+        if self.driver.xos_network.network_exist(vip_network_name):
+            LOG.debug("xos network %s already exists", vip_network_name)
+            return
+        xos_net = xos_network.XOSNetwork(name=vip_network_name,
+                                         subnetpool=s.get('subnetpool_id'),
+                                         subnet_range=s.get('cidr'),
+                                         gateway_ip=s.get('gateway_ip'))
+        self.driver.xos_network.create(xos_net)
 
     def _thread_op(self, context, lb, xos_lb_id):
         poll_interval = cfg.CONF.xos.request_poll_interval
@@ -154,6 +163,7 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         self.create(context, lb)
 
     def create(self, context, lb):
+        self._ensure_xos_network(context, lb)
         r = self.driver.client.post(self._url(), self._construct_args(lb))
         xos_lb_id = r.get('loadbalancer').get('loadbalancer_id')
         self.driver.plugin.db.update_loadbalancer(
