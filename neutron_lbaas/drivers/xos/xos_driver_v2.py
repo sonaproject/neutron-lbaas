@@ -200,7 +200,7 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def delete_pool(self, lb, xos_pool_id):
         xos_lb_id = lb.description
         xos_lb = self.get(xos_lb_id).get('loadbalancer')
-        pools = xos_lb.get('pools')
+        pools = [d['id'] for d in xos_lb.get('pools')]
         if xos_pool_id in pools:
             args = {'pool_id': None}
             self.driver.client.put(self._url(xos_lb_id), args)
@@ -209,7 +209,7 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def delete_listener(self, lb, xos_lsn_id):
         xos_lb_id = lb.description
         xos_lb = self.get(xos_lb_id).get('loadbalancer')
-        listeners = xos_lb.get('listeners')
+        listeners = [d['id'] for d in xos_lb.get('listeners')]
         if xos_lsn_id in listeners:
             args = {'listener_id': None}
             self.driver.client.put(self._url(xos_lb_id), args)
