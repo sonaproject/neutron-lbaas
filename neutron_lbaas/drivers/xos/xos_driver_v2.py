@@ -90,13 +90,15 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def allows_create_graph(self):
         return False
 
-    def _construct_args(self, db_lb):
-        # TODO: vip_subnet_id -> vip_network_name, remove vip_address
+    def _construct_args(self, db_lb, vip_network=None):
         args = {
             'name': db_lb.name,
-            'vip_subnet_id': 1,
-            'vip_address': '192.168.1.11',
         }
+
+        if vip_network:
+            vip_network_name = {'vip_network_name': vip_network}
+            args.update(vip_network_name)
+
         if db_lb.listeners and db_lb.listeners[0].name:
             try:
                 listener = {'listener': int(db_lb.listeners[0].name)}
@@ -119,7 +121,7 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
                                  'subnet_id': [vip_subnet_id]}}
         vip_ports = self.driver.plugin.db._core_plugin.get_ports(context, filters=filters)
         vip_port = vip_ports[0] if vip_ports and len(vip_ports) == 1 else None
-        return vip_port.get('id')
+        return vip_port.get('id') if vip_port else None
 
     def _ensure_xos_network(self, context, lb):
         s = self.driver.plugin.db._core_plugin.get_subnet(context, lb.vip_subnet_id)
@@ -127,12 +129,13 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         vip_network_name = n.get('name')
         if self.driver.xos_network.network_exist(vip_network_name):
             LOG.debug("xos network %s already exists", vip_network_name)
-            return
+            return vip_network_name
         xos_net = xos_network.XOSNetwork(name=vip_network_name,
                                          subnetpool=s.get('subnetpool_id'),
                                          subnet_range=s.get('cidr'),
                                          gateway_ip=s.get('gateway_ip'))
         self.driver.xos_network.create(xos_net)
+        return vip_network_name
 
     def _thread_op(self, context, lb, xos_lb_id):
         poll_interval = cfg.CONF.xos.request_poll_interval
@@ -143,8 +146,8 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
             r = self.driver.load_balancer.get(xos_lb_id)
             xos_lb = r.get('loadbalancer')
             vip_address = xos_lb.get('vip_address')
-
-            if self.driver.allocates_vip and vip_address:
+         
+            if self.driver.allocates_vip and vip_address and vip_address != '0.0.0.0':
                 lb.vip_port_id = \
                     self._get_vip_port_id(context,
                                           lb.vip_subnet_id,
@@ -163,8 +166,8 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         self.create(context, lb)
 
     def create(self, context, lb):
-        self._ensure_xos_network(context, lb)
-        r = self.driver.client.post(self._url(), self._construct_args(lb))
+        vip_network = self._ensure_xos_network(context, lb)
+        r = self.driver.client.post(self._url(), self._construct_args(lb, vip_network))
         xos_lb_id = r.get('loadbalancer').get('loadbalancer_id')
         self.driver.plugin.db.update_loadbalancer(
             context, lb.id, {'description': xos_lb_id})
@@ -260,8 +263,6 @@ class PoolManager(driver_base.BasePoolManager):
             'name': pool.name,
             'lb_algorithm': pool.lb_algorithm,
             'protocol': pool.protocol,
-            'subnet_id': '013d3059-87a4-45a5-91e9-d721068ae0b2',
-            'health_monitor_id': 1
         }
         if pool.healthmonitor and pool.healthmonitor.name:
             try:
@@ -349,7 +350,6 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
             'delay': hm.delay,
             'max_retries': hm.max_retries,
             'timeout': hm.timeout,
-            'http_method': 'GET'
         }
         LOG.debug("returning healthmon args:%s", args)
         return args
@@ -382,4 +382,5 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
+
 
