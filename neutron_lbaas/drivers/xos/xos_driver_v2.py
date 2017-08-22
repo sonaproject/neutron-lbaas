@@ -197,6 +197,24 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def get(self, xos_lb_id):
         return self.driver.client.get(self._url(xos_lb_id))
 
+    def delete_pool(self, lb, xos_pool_id):
+        xos_lb_id = lb.description
+        xos_lb = self.get(xos_lb_id).get('loadbalancer')
+        pools = xos_lb.get('pools')
+        if xos_pool_id in pools:
+            args = {'pool_id': None}
+            self.driver.client.put(self._url(xos_lb_id), args)
+        LOG.debug('updated xos lb for removing pool %s', xos_pool_id)
+
+    def delete_listener(self, lb, xos_lsn_id):
+        xos_lb_id = lb.description
+        xos_lb = self.get(xos_lb_id).get('loadbalancer')
+        listeners = xos_lb.get('listeners')
+        if xos_lsn_id in listeners:
+            args = {'listener_id': None}
+            self.driver.client.put(self._url(xos_lb_id), args)
+        LOG.debug('updated xos lb for removing listener %s', xos_lsn_id)
+
 
 class ListenerManager(driver_base.BaseListenerManager):
 
@@ -236,6 +254,8 @@ class ListenerManager(driver_base.BaseListenerManager):
                  listener.name, updated_lb.listeners[0].name)
 
     def delete(self, context, listener):
+        self.driver.load_balancer.delete_listener(
+            listener.loadbalancer, listener.description)
         self.driver.client.delete(self._url(listener.description))
         self.successful_completion(context, listener, delete=True)
 
@@ -293,6 +313,7 @@ class PoolManager(driver_base.BasePoolManager):
                  updated_lb.pools[0].description)
 
     def delete(self, context, pool):
+        self.driver.load_balancer.delete_pool(pool.loadbalancer, pool.description)
         self.driver.client.delete(self._url(pool.description))
         self.successful_completion(context, pool, delete=True)
 
@@ -307,6 +328,18 @@ class PoolManager(driver_base.BasePoolManager):
 
     def stats(self, context, pool):
         pass
+
+    def delete_healthmon(self, pool, hm_id):
+        xos_pool_id = pool.description
+        xos_pool = self.get(xos_pool_id)
+        healthmons = xos_pool.get('pool').get('health_monitors')
+        if hm_id in healthmons:
+            args = {'health_monitor_id': None}
+            self.driver.client.put(self._url(xos_pool_id), args)
+        LOG.debug('updated pools for removing healthmon %s', hm_id)
+
+    def get(self, xos_pool_id):
+        return self.driver.client.get(self._url(xos_pool_id))
 
 
 class MemberManager(driver_base.BaseMemberManager):
@@ -371,6 +404,7 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
                  xos_hm_name, updated_pool.healthmonitor.name)
 
     def delete(self, context, hm):
+        self.driver.pool.delete_healthmon(hm.pool, hm.url_path)
         self.driver.client.delete(self._url(hm.url_path))
         self.successful_completion(context, hm, delete=True)
 
@@ -382,5 +416,6 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
+
 
 
