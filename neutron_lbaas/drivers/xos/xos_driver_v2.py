@@ -346,24 +346,40 @@ class MemberManager(driver_base.BaseMemberManager):
 
     @staticmethod
     def _url(member, id=None):
-        s = '/pools/%s/members/' % member.pool.id
+        s = '/pools/%s/members/' % member.pool.description
         if id:
             s += '%s/' % id
         return s
 
-    def create(self, context, lb):
-            pass
+    def _construct_args(self, member):
+        args = {
+            'memberpool': member.pool.description,
+            'address': member.address,
+            'protocol_port': member.protocol_port
+        }
+        LOG.debug("returning xos member args:%s", args)
+        return args
 
-    def delete(self, context, lb):
+    def create(self, context, member):
+        r = self.driver.client.post(self._url(member))
+        xos_member_id = r.get('member').get('member_id')
+        self.driver.plugin.db.update_pool_member(
+            context, member.id, {'name': xos_member_id})
+        self.successful_completion(context, member)
+        LOG.info("created xos member %s", xos_member_id)
+
+    def delete(self, context, member):
+        self.driver.client.delete(self._url(member, member.name))
+        self.successful_completion(context, member)
+
+    def update(self, context, old_member, member):
+        self.driver.client.put(self._url(member, member.name))
+        self.successful_completion(context, member)
+
+    def refresh(self, context, member):
         pass
 
-    def update(self, context, old_lb, lb):
-        pass
-
-    def refresh(self, context, lb):
-        pass
-
-    def stats(self, context, lb):
+    def stats(self, context, member):
         pass
 
 
@@ -384,7 +400,7 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
             'max_retries': hm.max_retries,
             'timeout': hm.timeout,
         }
-        LOG.debug("returning healthmon args:%s", args)
+        LOG.debug("returning xos healthmon args:%s", args)
         return args
 
     def create(self, context, hm):
@@ -416,6 +432,4 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
-
-
 
