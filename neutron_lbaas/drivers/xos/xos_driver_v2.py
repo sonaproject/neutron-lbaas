@@ -426,3 +426,4 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
+
