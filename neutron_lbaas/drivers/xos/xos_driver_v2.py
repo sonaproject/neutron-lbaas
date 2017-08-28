@@ -93,6 +93,7 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def _construct_args(self, lb, vip_network=None):
         args = {
             'name': lb.name,
+            'owner': int(cfg.CONF.xos.service_id),
         }
 
         if vip_network:
@@ -426,4 +427,5 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
+
 

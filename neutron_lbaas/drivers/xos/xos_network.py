@@ -68,11 +68,11 @@ class XOSNetworkManager(object):
         )
 
     def create(self, xos_net):
-        slice_name = '%s_%s' % (cfg.CONF.xos.site_name, xos_net.name)
-        slice_id = self.slice_exist(slice_name)
+        endpoint = '%sapi/core' % cfg.CONF.xos.endpoint
 
+        slice_name = '%s_%s' % (cfg.CONF.xos.site_name, xos_net.name)
+        slice_id = self._get_slice(slice_name)
         if not slice_id:
-            endpoint = '%sapi/core' % cfg.CONF.xos.endpoint
             slice_args = {
                 'name': slice_name,
                 'description': '/usr/local/etc/haproxy/',
@@ -100,7 +100,7 @@ class XOSNetworkManager(object):
         r = self.client.post('api/core/networks/', network_args)
         LOG.info('created xos network %s', r)
 
-    def slice_exist(self, slice_name):
+    def _get_slice(self, slice_name):
         r = self.client.get('api/core/slices/?name=%s' % slice_name)
         return r[0].get('id') if len(r) == 1 else None
 
@@ -111,5 +111,3 @@ class XOSNetworkManager(object):
     def delete(self, net_name):
         # need xos specific id to remove
         pass
-
-
