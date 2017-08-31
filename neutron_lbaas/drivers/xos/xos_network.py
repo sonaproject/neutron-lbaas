@@ -88,25 +88,29 @@ class XOSNetworkManager(object):
             slice_id = r.get('id')
             LOG.info('created xos slice %s', r)
 
-        network_args = {
-            'name': xos_net.name,
-            'subnet': xos_net.subnet_range,
-            'start_ip': xos_net.gateway_ip,
-            'labels': xos_net.subnetpool,
-            'template': xos_net.template,
-            'owner': '%s/slices/%s/' % (endpoint, slice_id)
-        }
+        owner = '%s/slices/%s/' % (endpoint, slice_id)
+        if not self._network_exist(xos_net.name, owner):
+            network_args = {
+                'name': xos_net.name,
+                'subnet': xos_net.subnet_range,
+                'start_ip': xos_net.gateway_ip,
+                'labels': xos_net.subnetpool,
+                'template': xos_net.template,
+                'owner': owner
+            }
 
-        r = self.client.post('api/core/networks/', network_args)
-        LOG.info('created xos network %s', r)
+            self.client.post('api/core/networks/', network_args)
+            LOG.info('created xos network %s', r)
+
+        return slice_name
 
     def _get_slice(self, slice_name):
         r = self.client.get('api/core/slices/?name=%s' % slice_name)
         return r[0].get('id') if len(r) == 1 else None
 
-    def network_exist(self, net_name):
+    def _network_exist(self, net_name, owner):
         r = self.client.get('api/core/networks/?name=%s' % net_name)
-        return True if len(r) == 1 else False
+        return True if len(r) == 1 and r[0].get('owner') == owner else False
 
     def delete(self, net_name):
         # need xos specific id to remove

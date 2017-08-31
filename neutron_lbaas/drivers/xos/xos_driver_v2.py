@@ -90,15 +90,14 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
     def allows_create_graph(self):
         return False
 
-    def _construct_args(self, lb, vip_network=None):
+    def _construct_args(self, lb, slice_name=None):
         args = {
             'name': lb.name,
-            'owner': int(cfg.CONF.xos.service_id),
         }
 
-        if vip_network:
-            vip_network_name = {'vip_network_name': vip_network}
-            args.update(vip_network_name)
+        if slice_name:
+            slice_name_arg = {'slice_name': slice_name}
+            args.update(slice_name_arg)
 
         if lb.listeners and lb.listeners[0].description:
             try:
@@ -128,15 +127,11 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         s = self.driver.plugin.db._core_plugin.get_subnet(context, lb.vip_subnet_id)
         n = self.driver.plugin.db._core_plugin.get_network(context, s.get('network_id'))
         vip_network_name = n.get('name')
-        if self.driver.xos_network.network_exist(vip_network_name):
-            LOG.debug("xos network %s already exists", vip_network_name)
-            return vip_network_name
         xos_net = xos_network.XOSNetwork(name=vip_network_name,
                                          subnetpool=s.get('subnetpool_id'),
                                          subnet_range=s.get('cidr'),
                                          gateway_ip=s.get('gateway_ip'))
-        self.driver.xos_network.create(xos_net)
-        return vip_network_name
+        return self.driver.xos_network.create(xos_net)
 
     def _thread_op(self, context, lb, xos_lb_id):
         poll_interval = cfg.CONF.xos.request_poll_interval
@@ -167,8 +162,8 @@ class LoadBalancerManager(driver_base.BaseLoadBalancerManager):
         self.create(context, lb)
 
     def create(self, context, lb):
-        vip_network = self._ensure_xos_network(context, lb)
-        r = self.driver.client.post(self._url(), self._construct_args(lb, vip_network))
+        slice_name = self._ensure_xos_network(context, lb)
+        r = self.driver.client.post(self._url(), self._construct_args(lb, slice_name))
         xos_lb_id = r.get('loadbalancer').get('loadbalancer_id')
         self.driver.plugin.db.update_loadbalancer(
             context, lb.id, {'description': xos_lb_id})
@@ -350,7 +345,7 @@ class MemberManager(driver_base.BaseMemberManager):
 
     def _construct_args(self, member):
         args = {
-            'memberpool': member.pool.description,
+            'ptr_pool_id': member.pool.description,
             'address': member.address,
             'protocol_port': member.protocol_port
         }
@@ -358,7 +353,7 @@ class MemberManager(driver_base.BaseMemberManager):
         return args
 
     def create(self, context, member):
-        r = self.driver.client.post(self._url(member))
+        r = self.driver.client.post(self._url(member), self._construct_args(member))
         xos_member_id = r.get('member').get('member_id')
         self.driver.plugin.db.update_pool_member(
             context, member.id, {'name': xos_member_id})
@@ -427,5 +422,3 @@ class HealthMonitorManager(driver_base.BaseHealthMonitorManager):
 
     def stats(self, context, hm):
         pass
-
-
