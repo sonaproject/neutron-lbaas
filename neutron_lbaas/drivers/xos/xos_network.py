@@ -99,7 +99,7 @@ class XOSNetworkManager(object):
                 'owner': owner
             }
 
-            self.client.post('api/core/networks/', network_args)
+            r = self.client.post('api/core/networks/', network_args)
             LOG.info('created xos network %s', r)
 
         return slice_name

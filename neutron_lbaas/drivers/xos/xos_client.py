@@ -46,7 +46,7 @@ class XOSClient(object):
                             data=data,
                             headers=headers)
 
-        if method == 'DELETE' and r.status_code == 405:
+        if method == 'DELETE' and r.status_code == 404:
             return
 
         if not r.ok:

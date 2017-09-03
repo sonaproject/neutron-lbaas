@@ -362,7 +362,7 @@ class MemberManager(driver_base.BaseMemberManager):
 
     def delete(self, context, member):
         self.driver.client.delete(self._url(member, member.name))
-        self.successful_completion(context, member)
+        self.successful_completion(context, member, delete=True)
 
     def update(self, context, old_member, member):
         self.driver.client.put(self._url(member, member.name))
